@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Utility/Enemy.h>
 #include <ctime>
 #include <sstream>
 #include <vector>
@@ -24,6 +25,10 @@ private:
 	//game objects
 	sf::RectangleShape enemy;
 	std::vector<sf::RectangleShape> enemies;
+	sf::Texture textureSheet;
+	std::vector<sf::Texture> textures;
+	Enemy* enemyy;
+	std::vector<Enemy> enemiess;
 
 	//reosources
 	sf::Font font;
@@ -42,6 +47,7 @@ private:
 	void initVariables();
 	void initWindow();
 	void initEnemies();
+	void initTexture();
 	void initText();
 	void initFont();
 

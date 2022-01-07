@@ -1,9 +1,8 @@
-#include "Platform/Platform.hpp"
+
 #include "Utility/Game.h"
 
 int main()
 {
-	util::Platform platform;
 
 #if defined(_DEBUG)
 	std::cout << "Opening Game." << std::endl;

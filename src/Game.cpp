@@ -1,7 +1,19 @@
 #include "Utility/Game.h"
-#include "Platform/Platform.hpp"
 
-util::Platform platform;
+//Constructors  and Destructors
+Game::Game()
+{
+	this->initVariables();
+	this->initWindow();
+	this->initEnemies();
+	this->initFont();
+	this->initText();
+}
+
+Game::~Game()
+{
+	delete this->window;
+}
 
 //private
 void Game::initVariables()
@@ -30,25 +42,25 @@ void Game::initWindow()
 void Game::initEnemies()
 {
 	this->enemy.setPosition(10.f, 10.f);
-	this->enemy.setSize(sf::Vector2f(100.f, 100.f));
-	this->enemy.setFillColor(sf::Color::Cyan);
-	this->enemy.setOutlineColor(sf::Color::Blue);
-	this->enemy.setOutlineThickness(1.f);
+	this->enemy.setSize(sf::Vector2f(30.f, 30.f));
+	this->enemy.setTexture(&this->textureSheet);
+	this->enemyy = new Enemy();
 }
 
-//Constructors  and Destructors
-Game::Game()
+void Game::initFont()
 {
-	this->initVariables();
-	this->initWindow();
-	this->initEnemies();
-	this->initFont();
-	this->initText();
+	if (!this->font.loadFromFile("src/Fonts/Poppins-Regular.ttf"))
+	{
+		std::cout << "ERROR UPON LOADING FONT\n";
+	}
 }
 
-Game::~Game()
+void Game::initText()
 {
-	delete this->window;
+	this->uitext.setFont(this->font);
+	this->uitext.setCharacterSize(24);
+	this->uitext.setFillColor(sf::Color::White);
+	this->uitext.setString("none");
 }
 
 //accessors
@@ -58,6 +70,33 @@ bool Game::running()
 }
 
 //functions
+
+void Game::update()
+{
+	this->pollEvents();
+
+	if (this->endgame == false)
+	{
+		this->updateMousePos();
+		this->updateText();
+		this->updateEnemies();
+	}
+
+	//endgame condititon
+	if (this->playerHealth <= 0)
+		this->endgame = true;
+}
+
+void Game::render()
+{
+
+	this->window->clear();
+
+	this->renderEnemies(*this->window);
+	this->renderText(*this->window);
+
+	this->window->display();
+}
 
 void Game::updateMousePos()
 {
@@ -90,9 +129,21 @@ void Game::spawnEnemies()
 	float x = static_cast<float>(rand() % static_cast<int>(this->window->getSize().x - this->enemy.getSize().x));
 	this->enemy.setPosition(x, 0.f);
 
-	this->enemy.setFillColor(sf::Color::Blue);
+	//atribuir tipo 0 - pera,1 - banana, 2 - maça, 3 - mamão , 4 - limão
+	int type = rand() % 5;
 
-	this->enemies.push_back(this->enemy);
+	switch (type)
+	{
+		default:
+			break;
+		case 0:
+			std::cout << "here";
+			this->enemy.setFillColor(sf::Color::White);
+			this->enemy.setTexture(&texture);
+			this->enemies.push_back(this->enemy);
+			//this->enemy.setTextureRect(sf::IntRect(10, 10, 100, 100));
+			break;
+	}
 }
 
 void Game::updateEnemies()
@@ -137,62 +188,6 @@ void Game::updateEnemies()
 	}
 }
 
-void Game::renderEnemies(sf::RenderTarget& target)
-{
-	for (auto& e : this->enemies)
-	{
-		target.draw(e);
-	}
-}
-
-void Game::update()
-{
-	this->pollEvents();
-
-	if (this->endgame == false)
-	{
-		this->updateMousePos();
-
-		this->updateEnemies();
-	}
-
-	//endgame condititon
-	if (this->playerHealth <= 0)
-		this->endgame = true;
-}
-
-void Game::render()
-{
-
-	this->window->clear();
-
-	this->renderEnemies(*this->window);
-	this->renderText(*this->window);
-
-	this->window->display();
-}
-
-bool Game::getEndGame()
-{
-	return this->endgame;
-}
-
-void Game::initFont()
-{
-	if (!this->font.loadFromFile("../Poppins-Regular.ttf"))
-	{
-		std::cout << "ERROR UPON LOADING FONT\n";
-	}
-}
-
-void Game::initText()
-{
-	this->uitext.setFont(this->font);
-	this->uitext.setCharacterSize(13);
-	this->uitext.setFillColor(sf::Color::White);
-	this->uitext.setString("none");
-}
-
 void Game::updateText()
 {
 	std::stringstream ss;
@@ -202,7 +197,20 @@ void Game::updateText()
 	this->uitext.setString(ss.str());
 }
 
+void Game::renderEnemies(sf::RenderTarget& target)
+{
+	for (auto& e : this->enemies)
+	{
+		target.draw(e);
+	}
+}
+
 void Game::renderText(sf::RenderTarget& target)
 {
 	target.draw(this->uitext);
+}
+
+bool Game::getEndGame()
+{
+	return this->endgame;
 }
