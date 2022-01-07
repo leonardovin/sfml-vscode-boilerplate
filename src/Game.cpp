@@ -1,13 +1,19 @@
 #include "Utility/Game.h"
 
+//inicializando thread para o processo de textura. É um pointeiro, pois no c++ o thread se desmanhca em um final dee escopo.
+static std::thread* textureThread = nullptr;
+
 //Constructors  and Destructors
 Game::Game()
 {
 	this->initVariables();
 	this->initWindow();
-	this->initEnemies();
+	this->initEnemy();
 	this->initFont();
 	this->initText();
+	this->mouseHeld = false;
+
+	this->textureState.store(TEXTURE_IDLE);
 }
 
 Game::~Game()
@@ -19,32 +25,28 @@ Game::~Game()
 void Game::initVariables()
 {
 	this->window = nullptr;
-
 	this->points = 0;
-
-	this->enemySpawnTimerMax = 10.f;
+	this->playerHealth = 10;
+	this->enemySpawnTimerMax = 20.f;
 	this->enemySpawnTimer = this->enemySpawnTimerMax;
-	this->maxEnemies = 10;
-
-	this->playerHealth = 5;
-
+	this->maxEnemies = 8;
 	this->endgame = false;
+	this->requestTypes = { 1, 3 };
+	this->mouseHeld = false;
 }
 
 void Game::initWindow()
 {
-	this->videomode.height = 400;
-	this->videomode.width = 800;
+	this->videomode.height = 720;
+	this->videomode.width = 1280;
 	this->window = new sf::RenderWindow(this->videomode, "Task cruncher", sf::Style::Titlebar | sf::Style::Close);
 	this->window->setFramerateLimit(60);
 }
 
-void Game::initEnemies()
+void Game::initEnemy()
 {
-	this->enemy.setPosition(10.f, 10.f);
-	this->enemy.setSize(sf::Vector2f(30.f, 30.f));
-	this->enemy.setTexture(&this->textureSheet);
-	this->enemyy = new Enemy();
+	this->spawnTimerMax = 50.f;
+	this->spawnTimer = this->spawnTimerMax;
 }
 
 void Game::initFont()
@@ -77,9 +79,9 @@ void Game::update()
 
 	if (this->endgame == false)
 	{
+		this->updateEnemies();
 		this->updateMousePos();
 		this->updateText();
-		this->updateEnemies();
 	}
 
 	//endgame condititon
@@ -92,7 +94,11 @@ void Game::render()
 
 	this->window->clear();
 
-	this->renderEnemies(*this->window);
+	for (auto* enemy : this->enemies)
+	{
+		enemy->render(this->window);
+	}
+
 	this->renderText(*this->window);
 
 	this->window->display();
@@ -124,67 +130,118 @@ void Game::pollEvents()
 	}
 }
 
-void Game::spawnEnemies()
+void Game::pointSystem(Enemy* enemy, unsigned counter)
 {
-	float x = static_cast<float>(rand() % static_cast<int>(this->window->getSize().x - this->enemy.getSize().x));
-	this->enemy.setPosition(x, 0.f);
-
-	//atribuir tipo 0 - pera,1 - banana, 2 - maça, 3 - mamão , 4 - limão
-	int type = rand() % 5;
-
-	switch (type)
+	//check if clicked
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
 	{
-		default:
-			break;
-		case 0:
-			std::cout << "here";
-			this->enemy.setFillColor(sf::Color::White);
-			this->enemy.setTexture(&texture);
-			this->enemies.push_back(this->enemy);
-			//this->enemy.setTextureRect(sf::IntRect(10, 10, 100, 100));
-			break;
+
+		if (this->mouseHeld == false)
+		{
+			this->mouseHeld = true;
+			if (enemy->getBounds().contains(this->mousePosView))
+			{
+				//pontuação
+				this->enemies.erase(this->enemies.begin() + counter);
+				if (std::find(this->requestTypes.begin(), this->requestTypes.end(), enemy->getType()) != this->requestTypes.end())
+				{
+					this->points += 1;
+				}
+				else
+				{
+					this->points -= 1;
+				}
+			}
+		}
+	}
+	else
+	{
+		this->mouseHeld = false;
 	}
 }
 
 void Game::updateEnemies()
 {
 	// atualiza o tempo de spawn e spawna inimigos.
+	this->enemySpawnTimer -= 0.5;
 
 	if (this->enemies.size() < this->maxEnemies)
 	{
 		if (this->enemySpawnTimer >= this->enemySpawnTimerMax)
 		{
-			this->spawnEnemies();
-			this->enemySpawnTimer = 0.f;
+			Enemy* enemy = new Enemy(rand() % this->window->getSize().x - 20.f, 0.f);
+			//começando thread de textura
+			std::cout << "textstate: " << this->textureState.load() << "\n";
+			textureThread = new std::thread(&Enemy::frutalize, enemy, &this->textureState);
+			std::cout << "textstateafter: " << this->textureState.load() << "\n";
+
+			if (this->textureState.load() == TEXTURE_READY)
+			{
+				std::cout << "here\n";
+				this->enemies.push_back(enemy);
+				this->enemySpawnTimer = 0.f;
+				//TERMINOU USO DA TEXTURA, VOLTA O ESTADO
+				this->textureState.store(TEXTURE_IDLE);
+				textureThread->join();
+				delete textureThread;
+				textureThread = nullptr;
+			}
 		}
 		else
 			this->enemySpawnTimer += 1.f;
 	}
 
-	//movimentar os inimigos
-	for (unsigned int i = 0; i < this->enemies.size(); i++)
+	//update
+	unsigned counter = 0;
+	for (auto* enemy : this->enemies)
 	{
-		bool deleted = false;
-		this->enemies[i].move(0.f, 1.f);
+		enemy->update();
 
-		//check if clicked
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+		//if the enemy is in the bottom
+		if (enemy->getPosY() > this->window->getSize().y)
 		{
-			if (this->enemies[i].getGlobalBounds().contains(this->mousePosView))
+			if (std::find(this->requestTypes.begin(), this->requestTypes.end(), enemy->getType()) != this->requestTypes.end())
 			{
-				this->enemies.erase(this->enemies.begin() + i);
+				this->playerHealth -= 1;
+			}
+
+			this->enemies.erase(this->enemies.begin() + counter);
+		}
+		counter++;
+	}
+
+	//check if clicked
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+	{
+
+		if (this->mouseHeld == false)
+		{
+			this->mouseHeld = true;
+
+			counter = 0;
+			for (auto* enemy : this->enemies)
+			{
+				std::cout << "bounds" << enemy->getBounds().contains(this->mousePosView) << "\n";
+				if (enemy->getBounds().contains(this->mousePosView))
+				{
+					//pontuação
+					this->enemies.erase(this->enemies.begin() + counter);
+					if (std::find(this->requestTypes.begin(), this->requestTypes.end(), enemy->getType()) != this->requestTypes.end())
+					{
+						this->points += 1;
+					}
+					else
+					{
+						this->points -= 1;
+					}
+				}
+				counter++;
 			}
 		}
-
-		//if the enemy is in the button
-		if (this->enemies[i].getPosition().y > this->window->getSize().y)
-		{
-			this->playerHealth -= 1;
-			deleted = true;
-		}
-
-		if (deleted)
-			this->enemies.erase(this->enemies.begin() + i);
+	}
+	else
+	{
+		this->mouseHeld = false;
 	}
 }
 
@@ -192,17 +249,34 @@ void Game::updateText()
 {
 	std::stringstream ss;
 
-	ss << "Points" << this->points;
+	ss << "Pontos: " << this->points << "\n"
+	   << "Vida: " << this->playerHealth;
+
+	for (auto fruit : this->requestTypes)
+	{
+		switch (fruit)
+		{
+			default:
+				break;
+			case 0:
+				ss << "\nMaca\n";
+				break;
+			case 1:
+				ss << "\nBanana\n";
+				break;
+			case 2:
+				ss << "\nLaranja\n";
+				break;
+			case 3:
+				ss << "\nLimao\n";
+				break;
+			case 4:
+				ss << "\nPera\n";
+				break;
+		}
+	}
 
 	this->uitext.setString(ss.str());
-}
-
-void Game::renderEnemies(sf::RenderTarget& target)
-{
-	for (auto& e : this->enemies)
-	{
-		target.draw(e);
-	}
 }
 
 void Game::renderText(sf::RenderTarget& target)
